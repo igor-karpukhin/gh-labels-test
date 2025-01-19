@@ -25,6 +25,14 @@ jobs:
             const labels = context.payload.pull_request.labels.map(label => label.name);
             core.setOutput('labels', labels.join(','));
 
+      - name: Exit if no labels
+        id: check-labels
+        run: |
+          if [ -z "${{ steps.get-labels.outputs.labels }}" ]; then
+            echo "No labels found on the PR. Skipping tests."
+            exit 0
+          fi
+
       - name: Determine if all tests should run
         id: check-all
         run: |
