@@ -7,7 +7,7 @@ import (
 	"github.com/igor-karpukhin/gh-labels-test/pkg/vehicles"
 )
 
-var _ = Describe("Users test", Label("test-users"), func() {
+var _ = Describe("Users test", Label("test-vehicles"), func() {
 	It("should create a new user", func() {
 		Expect(vehicles.NewCar("BMW", "525")).NotTo(BeNil())
 	})
