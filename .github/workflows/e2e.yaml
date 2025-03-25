@@ -1,9 +1,20 @@
 name: Test e2e
 
-
 on:
+  workflow_call:
+    inputs:
+      labels:
+        type: string
+        description: "Comma separated list of labels to run"
+        required: false
+        default: ""
+      branch:
+        type: string
+        description: "Branch to run the tests"
+        required: false
+        default: "main"
   pull_request:
-   types: ["opened", "edited", "synchronized", "labeled", "unlabeled"]
+    types: ["opened", "edited", "labeled", "unlabeled"]
 
 jobs:
   test-e2e:
@@ -22,13 +33,14 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
-            const labels = context.payload.pull_request.labels.map(label => label.name);
+            const labels = context.payload.pull_request.labels.map(label => label.name).filter(label => label.startsWith('test/'));
             core.setOutput('labels', labels.join(','));
+            console.log(`Labels from PR: ${labels}`);
 
       - name: Determine if all tests should run
         id: check-all
         run: |
-          if [[ "${{ steps.get-labels.outputs.labels }}" == *"run-all"* ]]; then
+          if [[ "${{ steps.get-labels.outputs.labels }}" == *"test/all"* ]]; then
             echo "Run all tests: true"
             echo "run-all=true" >> $GITHUB_ENV
           else
@@ -36,16 +48,70 @@ jobs:
             echo "run-all=false" >> $GITHUB_ENV
           fi
 
-      - name: Run e2e tests
-        if: ${{ steps.get-labels.outputs.labels != '' }}
+      - name: List all ginkgo tests labels
+        id: list-labels
+        if: ${{ steps.check-all.outputs.run-all == 'false' }}
         run: |
-          echo "Labels from PR: ${{ steps.get-labels.outputs.labels }}"
+          sudo apt-get install -y jq
           go install github.com/onsi/ginkgo/v2/ginkgo@latest
-          if [ "${{ env.run-all }}" == "true" ]; then
-            echo "Running all tests..."
-            ginkgo -r
-          else
-            echo "Running filtered tests..."
-            cd ./test/e2e && ginkgo -r --label-filter "${{ steps.get-labels.outputs.labels}}"
-          fi
+          ginkgo labels ./test/e2e | cut -c 5- > e2e_labels.txt
+          ginkgo labels ./test/int | cut -c 5- > int_labels.txt
+          jq -s '.[0] + .[1] | unique' e2e_labels.txt int_labels.txt > all_labels.json
+          available_labels=$(jq -r '.[]' all_labels.json)
+          echo "Available labels: $available_labels"
+          echo "available-labels=$available_labels" >> $GITHUB_ENV
 
+          pr_labels="${{ steps.get-labels.outputs.labels }}"
+          intersection=$(echo $pr_labels $available_labels | tr ' ' '\n' | sort | uniq -d)
+          echo "Intersection of PR labels and available labels: $intersection"
+          echo "intersection-labels=$intersection" >> $GITHUB_ENV
+
+          echo "${{ steps.get-labels.outputs.labels }}" | jq -R 'split(",")' > pr_labels.json
+          jq -s '.[0] as $all | .[1] | map(select($all[] == .))' all_labels.json pr_labels.json > merged_labels.json
+
+      - name: Create matrix for jobs
+        id: create-matrix
+        run: |
+          if [ "${{ env.run_all }}" == "true" ]; then
+            echo "Running all tests in a single job..."
+            echo '{"include":[{"label":"all"}]}' > matrix.json
+          else:
+            intersection_labels="${{ env.intersection-labels }}"
+            if [ -z "$intersection_labels" ]; then
+              echo "No matching labels found. Exiting..."
+              exit 0
+            fi
+          echo "Creating matrix for labels: $intersection_labels"
+          matrix=$(echo $intersection_labels | jq -R 'split(" ") | map({label: .}) | {include: .}')
+          echo $matrix > matrix.json
+
+      - name: Run tests for each label
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const matrix = JSON.parse(fs.readFileSync('matrix.json', 'utf8'));
+            core.setOutput('matrix', JSON.stringify(matrix.include));
+
+      test-e2e-matrix:
+        needs: test-e2e
+        runs-on: ubuntu-latest
+        strategy:
+          matrix: ${{ fromJson(needs.test-e2e.outputs.matrix) }}
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v3
+
+        - name: Setup GO
+          uses: actions/setup-go@v4
+          with:
+            go-version: 1.23
+
+        - name: Run e2e tests
+          run: |
+            echo "Running tests for label: ${{ matrix.label }}"
+            go install github.com/onsi/ginkgo/v2/ginkgo@latest
+            if [ "${{ matrix.label }}" == "all" ]; then
+              ginkgo -r
+            else
+              cd ./test/e2e && ginkgo -r --label-filter "${{ matrix.label }}"
