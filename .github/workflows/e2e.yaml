@@ -17,8 +17,10 @@ on:
     types: ["opened", "edited", "labeled", "unlabeled"]
 
 jobs:
-  test-e2e:
+  prepare-tests:
     runs-on: ubuntu-latest
+    outputs:
+      test_matrix: ${{ steps.compute-matrix.outputs.matrix }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -46,7 +48,7 @@ jobs:
           else
             echo "Run all tests: false"
             echo "run-all=false" >> $GITHUB_ENV
-          fi
+          fi 
 
       - name: List all ginkgo tests labels
         id: list-labels
@@ -85,7 +87,8 @@ jobs:
           matrix=$(echo $intersection_labels | jq -R 'split(" ") | map({label: .}) | {include: .}')
           echo $matrix > matrix.json
 
-      - name: Run tests for each label
+      - name: Compute test matrix
+        id: compute-matrix
         uses: actions/github-script@v6
         with:
           script: |
@@ -93,25 +96,27 @@ jobs:
             const matrix = JSON.parse(fs.readFileSync('matrix.json', 'utf8'));
             core.setOutput('matrix', JSON.stringify(matrix.include));
 
-      test-e2e-matrix:
-        needs: test-e2e
-        runs-on: ubuntu-latest
-        strategy:
-          matrix: ${{ fromJson(needs.test-e2e.outputs.matrix) }}
-        steps:
-        - name: Checkout code
-          uses: actions/checkout@v3
+  run:
+    runs-on: ubuntu-latest
+    needs: prepare-tests
+    strategy:
+      matrix:
+        tests: ${{ fromJson(needs.test-e2e.outputs.matrix) }}
 
-        - name: Setup GO
-          uses: actions/setup-go@v4
-          with:
-            go-version: 1.23
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-        - name: Run e2e tests
-          run: |
-            echo "Running tests for label: ${{ matrix.label }}"
-            go install github.com/onsi/ginkgo/v2/ginkgo@latest
-            if [ "${{ matrix.label }}" == "all" ]; then
-              ginkgo -r
-            else
-              cd ./test/e2e && ginkgo -r --label-filter "${{ matrix.label }}"
+    - name: Setup GO
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.23
+
+    - name: Run e2e tests
+      run: |
+        echo "Running tests for label: ${{ matrix.label }}"
+        go install github.com/onsi/ginkgo/v2/ginkgo@latest
+        if [ "${{ matrix.label }}" == "all" ]; then
+          ginkgo -r
+        else
+          cd ./test/e2e && ginkgo -r --label-filter "${{ matrix.label }}"
