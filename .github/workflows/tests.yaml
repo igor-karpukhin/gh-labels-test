@@ -59,28 +59,28 @@ jobs:
               console.log("PR labels:", labels);
               console.log("Test Labels:", testLabels);
               
-              for (let i = 0; i < labels.length; i++) {
-                let label = labels[i];
-            
-                if (label === "test/int/*") {
-                  testLabels.int.forEach(test => matchedLabels.add(test));
-                } else if (label === "test/e2e/*") {
-                  testLabels.e2e.forEach(test => matchedLabels.add(test));
-                } else {
-                  let prefixMatch = label.match(/^test\/(int|e2e)\/(.+)$/);
-                  if (prefixMatch) {
-                    let category = prefixMatch[1]; // "int" or "e2e"
-                    let pattern = new RegExp(`^${prefixMatch[2].replace(/\*/g, ".*")}$`);
-            
-                    testLabels[category].forEach(test => {
-                      if (pattern.test(test)) {
-                        matchedLabels.add(test);
-                      }
-                    });
+                for (let i = 0; i < labels.length; i++) {
+                  let label = labels[i];
+              
+                  if (label === "test/int/*") {
+                    testLabels.int.forEach(test => matchedLabels.add(test));
+                  } else if (label === "test/e2e/*") {
+                    testLabels.e2e.forEach(test => matchedLabels.add(test));
+                  } else {
+                    let prefixMatch = label.match(/^test\/(int|e2e)\/(.+)$/); // Match int or e2e category
+                    if (prefixMatch) {
+                      let category = prefixMatch[1]; // "int" or "e2e"
+                      let pattern = new RegExp(`^${prefixMatch[2].replace(/\*/g, ".*")}$`);
+                  
+                      testLabels[category].forEach(test => {
+                        if (pattern.test(test)) {
+                          matchedLabels.add(test);
+                        }
+                      });
+                    }
                   }
                 }
-              }
-            
+          
               return [...matchedLabels];
             }
             
