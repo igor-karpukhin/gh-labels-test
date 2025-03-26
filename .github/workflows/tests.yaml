@@ -99,6 +99,9 @@ jobs:
             const matchedIntTests = matchWildcards(labels, testLabels);
             const matchedE2ETests = matchWildcards(labels, testLabels);
             
+            console.log("Integration tests to launch:", JSON.stringify(matchedIntTests));
+            console.log("E2E tests to launch:", JSON.stringify(matchedE2ETests));
+            
             core.setOutput("int_matrix", JSON.stringify(matchedIntTests));
             core.setOutput("e2e_matrix", JSON.stringify(matchedE2ETests));
 
