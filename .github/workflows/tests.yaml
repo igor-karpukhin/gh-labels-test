@@ -1,6 +1,7 @@
 name: PR Test Runner
 
-# This is another prototype without merging labels
+# This a prototype for running tests based on PR labels
+
 on:
   pull_request:
     types: [opened, synchronize, labeled, unlabeled]
@@ -12,6 +13,12 @@ jobs:
       int_matrix: ${{ steps.set-matrix.outputs.int_matrix }}
       e2e_matrix: ${{ steps.set-matrix.outputs.e2e_matrix }}
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Ginkgo
+        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
+
       - name: Get PR Labels
         id: get-labels
         uses: actions/github-script@v7
@@ -21,86 +28,78 @@ jobs:
             console.log("PR Labels:", labels);
             return labels;
 
-      - name: Extract Test Labels
-        id: set-matrix
+      - name: List available Ginkgo test labels
+        id: fetch-labels
         run: |
-          ALL_INT_TESTS=false
-          ALL_E2E_TESTS=false
+          INT_LABELS=$(cd ./test/int && ginkgo labels | jq -R -s -c 'split("\n")[:-1]')
+          E2E_LABELS=$(cd ./test/e2e && ginkgo labels | jq -R -s -c 'split("\n")[:-1]')
 
-          # Check if wildcard labels exist
-          if echo '${{ steps.get-labels.outputs.result }}' | grep -q '"test/int/\*"'; then
-            ALL_INT_TESTS=true
-          fi
-          if echo '${{ steps.get-labels.outputs.result }}' | grep -q '"test/e2e/\*"'; then
-            ALL_E2E_TESTS=true
-          fi
+          echo "int_labels=$INT_LABELS" >> $GITHUB_ENV
+          echo "e2e_labels=$E2E_LABELS" >> $GITHUB_ENV
 
-          # Extract specific test labels
-          INT_LABELS=$(echo '${{ steps.get-labels.outputs.result }}' | jq -c '[ .[] | select(startswith("test/int/")) | sub("test/int/"; "") ]')
-          E2E_LABELS=$(echo '${{ steps.get-labels.outputs.result }}' | jq -c '[ .[] | select(startswith("test/e2e/")) | sub("test/e2e/"; "") ]')
+      - name: Compute Test Matrix
+        id: set-matrix
+        uses: actions/github-script@v7
+        env:
+          INT_LABELS: ${{ env.int_labels }}
+          E2E_LABELS: ${{ env.e2e_labels }}
+        with:
+          script: |
+            function matchWildcards(labels, testLabels) {
+              let matchedLabels = new Set();
 
-          # If wildcard label is present, run all tests in that category
-          if [[ "$ALL_INT_TESTS" == "true" ]]; then
-            INT_LABELS=$(ls ./test/int | jq -R -s -c 'split("\n")[:-1]')
-          fi
-          if [[ "$ALL_E2E_TESTS" == "true" ]]; then
-            E2E_LABELS=$(ls ./test/e2e | jq -R -s -c 'split("\n")[:-1]')
-          fi
+              labels.forEach(label => {
+                if (label === "test/int/*") {
+                  matchedLabels = new Set(testLabels.integration);
+                } else if (label === "test/e2e/*") {
+                  matchedLabels = new Set(testLabels.e2e);
+                } else {
+                  let prefixMatch = label.match(/^test\/(int|e2e)\/(.+)$/);
+                  if (prefixMatch) {
+                    let category = prefixMatch[1];
+                    let pattern = prefixMatch[2].replace(/\*/g, ".*"); // Convert wildcard to regex
+                    let regex = new RegExp(`^${pattern}$`);
+            
+                    testLabels[category].forEach(test => {
+                      if (regex.test(test)) {
+                        matchedLabels.add(test);
+                      }
+                    });
+                  }
+                }
+              });
 
-          echo "Final Integration Test Labels: $INT_LABELS"
-          echo "Final E2E Test Labels: $E2E_LABELS"
+              return [...matchedLabels];
+            }
 
-          echo "int_matrix=$INT_LABELS" >> $GITHUB_OUTPUT
-          echo "e2e_matrix=$E2E_LABELS" >> $GITHUB_OUTPUT
+            const labels = ${{ steps.get-labels.outputs.result }};
+            const testLabels = {
+              integration: JSON.parse(process.env.INT_LABELS || "[]"),
+              e2e: JSON.parse(process.env.E2E_LABELS || "[]"),
+            };
 
-  run-integration-tests:
+            const matchedIntTests = matchWildcards(labels, testLabels.integration);
+            const matchedE2ETests = matchWildcards(labels, testLabels.e2e);
+
+            core.setOutput("int_matrix", JSON.stringify(matchedIntTests));
+            core.setOutput("e2e_matrix", JSON.stringify(matchedE2ETests));
+
+  run-tests:
     needs: detect-tests
-    if: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) != '[]' }} # Run only if integration test labels exist
+    if: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) != '[]' || fromJSON(needs.detect-tests.outputs.e2e_matrix) != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}
+        type: [int, e2e] # Run for both integration and e2e tests
+        test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup GO
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.23
-
-      - name: Install Ginkgo
-        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
-
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Run Ginkgo Integration Tests
-        run: |
-          cd ./test/int
-          ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
-
-  run-e2e-tests:
-    needs: detect-tests
-    if: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) != '[]' }} # Run only if e2e test labels exist
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        test: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup GO
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.23
-
       - name: Install Ginkgo
         run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
-
-      - name: Run Ginkgo End-to-End Tests
+      - name: Run Ginkgo Tests
         run: |
-          cd ./test/e2e
+          cd ./test/${{ matrix.type }}
           ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
