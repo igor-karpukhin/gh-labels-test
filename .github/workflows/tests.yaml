@@ -1,0 +1,86 @@
+name: PR Test Runner
+
+# This is another prototype without merging labels
+on:
+  pull_request:
+    types: [opened, synchronize, labeled, unlabeled]
+
+jobs:
+  detect-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      int_matrix: ${{ steps.set-matrix.outputs.int_matrix }}
+      e2e_matrix: ${{ steps.set-matrix.outputs.e2e_matrix }}
+    steps:
+      - name: Get PR Labels
+        id: get-labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(label => label.name);
+            console.log("PR Labels:", labels);
+            return labels;
+
+      - name: Extract Test Labels
+        id: set-matrix
+        run: |
+          ALL_INT_TESTS=false
+          ALL_E2E_TESTS=false
+
+          # Check if wildcard labels exist
+          if echo '${{ steps.get-labels.outputs.result }}' | grep -q '"test/int/\*"'; then
+            ALL_INT_TESTS=true
+          fi
+          if echo '${{ steps.get-labels.outputs.result }}' | grep -q '"test/e2e/\*"'; then
+            ALL_E2E_TESTS=true
+          fi
+
+          # Extract specific test labels
+          INT_LABELS=$(echo '${{ steps.get-labels.outputs.result }}' | jq -c '[ .[] | select(startswith("test/int/")) | sub("test/int/"; "") ]')
+          E2E_LABELS=$(echo '${{ steps.get-labels.outputs.result }}' | jq -c '[ .[] | select(startswith("test/e2e/")) | sub("test/e2e/"; "") ]')
+
+          # If wildcard label is present, run all tests in that category
+          if [[ "$ALL_INT_TESTS" == "true" ]]; then
+            INT_LABELS=$(ls ./test/int | jq -R -s -c 'split("\n")[:-1]')
+          fi
+          if [[ "$ALL_E2E_TESTS" == "true" ]]; then
+            E2E_LABELS=$(ls ./test/e2e | jq -R -s -c 'split("\n")[:-1]')
+          fi
+
+          echo "Final Integration Test Labels: $INT_LABELS"
+          echo "Final E2E Test Labels: $E2E_LABELS"
+
+          echo "int_matrix=$INT_LABELS" >> $GITHUB_OUTPUT
+          echo "e2e_matrix=$E2E_LABELS" >> $GITHUB_OUTPUT
+
+  run-integration-tests:
+    needs: detect-tests
+    if: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) != [] }} # Run only if integration test labels exist
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Ginkgo Integration Tests
+        run: |
+          cd ./test/int
+          ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
+
+  run-e2e-tests:
+    needs: detect-tests
+    if: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) != [] }} # Run only if e2e test labels exist
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Ginkgo End-to-End Tests
+        run: |
+          cd ./test/e2e
+          ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast

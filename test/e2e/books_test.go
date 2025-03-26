@@ -7,7 +7,7 @@ import (
 	"github.com/igor-karpukhin/gh-labels-test/pkg/books"
 )
 
-var _ = Describe("Books test", Label("test/e2e/books"), func() {
+var _ = Describe("Books test", Label("books"), func() {
 	It("should create a new book", func() {
 		Expect(books.NewBook("The Hobbit", "J.R.R. Tolkien")).NotTo(BeNil())
 	})

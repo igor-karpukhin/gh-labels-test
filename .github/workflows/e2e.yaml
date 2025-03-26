@@ -13,8 +13,8 @@ on:
         description: "Branch to run the tests"
         required: false
         default: "main"
-  pull_request:
-    types: ["opened", "edited", "labeled", "unlabeled"]
+#  pull_request:
+#    types: ["opened", "edited", "labeled", "unlabeled"]
 
 jobs:
   prepare-tests:

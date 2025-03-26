@@ -7,7 +7,7 @@ import (
 	"github.com/igor-karpukhin/gh-labels-test/pkg/users"
 )
 
-var _ = Describe("Users test", Label("test/int/users"), func() {
+var _ = Describe("Users test", Label("users"), func() {
 	It("should create a new user", func() {
 		Expect(users.NewUser("test", 10)).NotTo(BeNil())
 	})
