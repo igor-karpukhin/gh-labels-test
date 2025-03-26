@@ -36,8 +36,8 @@ jobs:
       - name: List available Ginkgo test labels
         id: fetch-labels
         run: |
-          INT_LABELS=$(cd ./test/int && ginkgo labels | jq -R -s -c 'split("\n")[:-1]')
-          E2E_LABELS=$(cd ./test/e2e && ginkgo labels | jq -R -s -c 'split("\n")[:-1]')
+          INT_LABELS=$(cd ./test/int && ginkgo labels | sed 's/^int: //' | jq -s -c '.[0]')
+          E2E_LABELS=$(cd ./test/e2e && ginkgo labels | sed 's/^e2e: //' | jq -s -c '.[0]')
 
           echo "int_labels=$INT_LABELS" >> $GITHUB_ENV
           echo "e2e_labels=$E2E_LABELS" >> $GITHUB_ENV
@@ -55,10 +55,10 @@ jobs:
           script: |
             function matchWildcards(labels, testLabels) {
               let matchedLabels = new Set();
-            
-              console.log("PR Labels:", labels);
+              
+              console.log("PR labels:", labels);
               console.log("Test Labels:", testLabels);
-            
+              
               for (let i = 0; i < labels.length; i++) {
                 let label = labels[i];
             
@@ -72,13 +72,11 @@ jobs:
                     let category = prefixMatch[1]; // "int" or "e2e"
                     let pattern = new RegExp(`^${prefixMatch[2].replace(/\*/g, ".*")}$`);
             
-                    if (Array.isArray(testLabels[category])) {
-                      testLabels[category].forEach(test => {
-                        if (pattern.test(test)) {
-                          matchedLabels.add(test);
-                        }
-                      });
-                    }
+                    testLabels[category].forEach(test => {
+                      if (pattern.test(test)) {
+                        matchedLabels.add(test);
+                      }
+                    });
                   }
                 }
               }
@@ -89,24 +87,17 @@ jobs:
             let labels = [];
             try {
               labels = JSON.parse(`${{ steps.get-labels.outputs.result }}` || "[]");
-              if (!Array.isArray(labels)) labels = [];
             } catch (error) {
               labels = [];
             }
             
-            let testLabels = { int: [], e2e: [] };
-            try {
-              testLabels.int = JSON.parse(process.env.INT_LABELS || "[]");
-              testLabels.e2e = JSON.parse(process.env.E2E_LABELS || "[]");
-            } catch (error) {
-              console.log("Error parsing test labels:", error);
-            }
+            const testLabels = {
+              int: JSON.parse(process.env.INT_LABELS),
+              e2e: JSON.parse(process.env.E2E_LABELS),
+            };
             
             const matchedIntTests = matchWildcards(labels, testLabels);
             const matchedE2ETests = matchWildcards(labels, testLabels);
-            
-            console.log("Integration tests to launch:", JSON.stringify(matchedIntTests));
-            console.log("E2E tests to launch:", JSON.stringify(matchedE2ETests));
             
             core.setOutput("int_matrix", JSON.stringify(matchedIntTests));
             core.setOutput("e2e_matrix", JSON.stringify(matchedE2ETests));
