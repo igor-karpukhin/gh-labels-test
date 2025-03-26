@@ -40,20 +40,20 @@ jobs:
             console.log(`Labels from PR: ${labels}`);
 
       - name: Determine if all tests should run
-        id: check-all
+        id: all_tests
         run: |
           if [[ "${{ steps.get-labels.outputs.labels }}" == *"test/all"* ]]; then
             echo "Run all tests: true"
-            echo "run-all=true" >> $GITHUB_ENV
+            echo "run_all=true" >> $GITHUB_ENV
           else
             echo "Run all tests: false"
-            echo "run-all=false" >> $GITHUB_ENV
+            echo "run_all=false" >> $GITHUB_ENV
           fi
           echo "env: ${{ GITHUB_ENV }}"
 
       - name: List all ginkgo tests labels
+        if: ${{ steps.all_tests.outputs.run_all == 'false' }}
         id: list-labels
-        if: ${{ steps.check-all.outputs.run-all == 'false' }}
         run: |
           sudo apt-get install -y jq
           go install github.com/onsi/ginkgo/v2/ginkgo@latest
