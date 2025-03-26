@@ -49,7 +49,7 @@ jobs:
             echo "Run all tests: false"
             echo "run_all=false" >> $GITHUB_ENV
           fi
-          echo "Running all tests? ${{ GITHUB_ENV }}"
+          echo "Running all tests? $GITHUB_ENV"
 
 #      - name: List all ginkgo tests labels
 #        if: env.run_all != 'true'
