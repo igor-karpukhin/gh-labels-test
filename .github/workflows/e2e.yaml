@@ -1,7 +1,7 @@
 name: Test e2e
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       labels:
         type: string
@@ -52,7 +52,7 @@ jobs:
           echo "env: ${{ GITHUB_ENV }}"
 
       - name: List all ginkgo tests labels
-        if: steps.all_tests.outputs.run_all != 'true'
+        if: env.run_all != 'true'
         id: list-labels
         run: |
           sudo apt-get install -y jq
