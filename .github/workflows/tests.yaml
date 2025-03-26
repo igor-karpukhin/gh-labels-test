@@ -41,6 +41,9 @@ jobs:
 
           echo "int_labels=$INT_LABELS" >> $GITHUB_ENV
           echo "e2e_labels=$E2E_LABELS" >> $GITHUB_ENV
+          
+          echo "Available Integration Tests: $INT_LABELS"
+          echo "Available E2E Tests: $E2E_LABELS"
 
       - name: Compute Test Matrix
         id: set-matrix
