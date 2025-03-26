@@ -12,17 +12,6 @@ jobs:
       int_matrix: ${{ steps.set-matrix.outputs.int_matrix }}
       e2e_matrix: ${{ steps.set-matrix.outputs.e2e_matrix }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup GO
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.23
-
-      - name: Install Ginkgo
-        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
-
       - name: Get PR Labels
         id: get-labels
         uses: actions/github-script@v7
@@ -72,6 +61,17 @@ jobs:
       matrix:
         test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup GO
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.23
+
+      - name: Install Ginkgo
+        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
+
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -88,8 +88,17 @@ jobs:
       matrix:
         test: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup GO
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.23
+
+      - name: Install Ginkgo
+        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
+
 
       - name: Run Ginkgo End-to-End Tests
         run: |
