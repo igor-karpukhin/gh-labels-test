@@ -77,7 +77,7 @@ jobs:
           if [ "${{ env.run_all }}" == "true" ]; then
             echo "Running all tests in a single job..."
             echo '{"include":[{"label":"all"}]}' > matrix.json
-          else:
+          else
             intersection_labels="${{ env.intersection-labels }}"
             if [ -z "$intersection_labels" ]; then
               echo "No matching labels found. Exiting..."
