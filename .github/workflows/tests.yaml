@@ -86,7 +86,10 @@ jobs:
             let labels = [];
             try {
               labels = JSON.parse(`${{ steps.get-labels.outputs.result }}` || "[]");
-              if (!Array.isArray(labels)) labels = [];
+              if (!Array.isArray(labels)) {
+                labels = [];
+              }
+              console.log("Got PR labels:", labels);
             } catch (error) {
               labels = [];
             }
