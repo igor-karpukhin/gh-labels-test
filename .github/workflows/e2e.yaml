@@ -70,6 +70,7 @@ jobs:
 
           echo "${{ steps.get-labels.outputs.labels }}" | jq -R 'split(",")' > pr_labels.json
           jq -s '.[0] as $all | .[1] | map(select($all[] == .))' all_labels.json pr_labels.json > merged_labels.json
+          echo "Merged labels: $(cat merged_labels.json)"
 
       - name: Create matrix for jobs
         id: create-matrix
