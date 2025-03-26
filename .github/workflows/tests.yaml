@@ -55,7 +55,10 @@ jobs:
           script: |
             function matchWildcards(labels, testLabels) {
               let matchedLabels = new Set();
-
+              
+              console.log("PR Labels:", labels);
+              console.log("Test Labels:", testLabels);
+            
               labels.forEach(label => {
                 if (label === "test/int/*") {
                   matchedLabels = new Set(testLabels.integration);
