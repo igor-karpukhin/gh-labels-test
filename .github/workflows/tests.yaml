@@ -82,5 +82,6 @@ jobs:
 
       - name: Run Ginkgo End-to-End Tests
         run: |
+          go install github.com/onsi/ginkgo/v2/ginkgo@latest
           cd ./test/e2e
           ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
