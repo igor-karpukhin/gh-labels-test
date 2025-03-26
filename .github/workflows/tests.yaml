@@ -83,7 +83,14 @@ jobs:
               return [...matchedLabels];
             }
 
-            const labels = ${{ steps.get-labels.outputs.result }};
+            let labels = [];
+            try {
+              labels = JSON.parse(`${{ steps.get-labels.outputs.result }}` || "[]");
+              if (!Array.isArray(labels)) labels = [];
+            } catch (error) {
+              labels = [];
+            }
+            
             const testLabels = {
               integration: JSON.parse(process.env.INT_LABELS || "[]"),
               e2e: JSON.parse(process.env.E2E_LABELS || "[]"),
