@@ -104,6 +104,9 @@ jobs:
             
             const matchedIntTests = matchWildcards(labels, testLabels);
             const matchedE2ETests = matchWildcards(labels, testLabels);
+            
+            core.setOutput("int_matrix", JSON.stringify(matchedIntTests));
+            core.setOutput("e2e_matrix", JSON.stringify(matchedE2ETests));
 
   run-tests:
     needs: detect-tests
