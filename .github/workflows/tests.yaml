@@ -53,37 +53,29 @@ jobs:
           E2E_LABELS: ${{ env.e2e_labels }}
         with:
           script: |
-            function matchWildcards(labels, testLabels) {
+            function matchWildcards(labels, testLabels, testType) {
               let matchedLabels = new Set();
-              
-              console.log("PR labels:", labels);
-              console.log("Test Labels:", testLabels);
-              
-                for (let i = 0; i < labels.length; i++) {
-                  let label = labels[i];
-              
-                  if (label === "test/int/*") {
-                    testLabels.int.forEach(test => matchedLabels.add(test));
-                  } else if (label === "test/e2e/*") {
-                    testLabels.e2e.forEach(test => matchedLabels.add(test));
-                  } else {
-                    let prefixMatch = label.match(/^test\/(int|e2e)\/(.+)$/); // Match int or e2e category
-                    if (prefixMatch) {
-                      let category = prefixMatch[1]; // "int" or "e2e"
-                      let pattern = new RegExp(`^${prefixMatch[2].replace(/\*/g, ".*")}$`);
-                  
-                      testLabels[category].forEach(test => {
-                        if (pattern.test(test)) {
-                          matchedLabels.add(test);
-                        }
-                      });
-                    }
+          
+              for (let i = 0; i < labels.length; i++) {
+                let label = labels[i];
+            
+                if (label === `test/${testType}/*`) {
+                  testLabels.forEach(test => matchedLabels.add(test));
+                } else {
+                  let prefixMatch = label.match(new RegExp(`^test/${testType}/(.+)$`));
+                  if (prefixMatch) {
+                    let pattern = new RegExp(`^${prefixMatch[1].replace(/\*/g, ".*")}$`);
+                    testLabels.forEach(test => {
+                      if (pattern.test(test)) {
+                        matchedLabels.add(test);
+                      }
+                    });
                   }
                 }
-          
+              }
               return [...matchedLabels];
             }
-            
+
             let labels = [];
             try {
               labels = JSON.parse(`${{ steps.get-labels.outputs.result }}` || "[]");
@@ -91,16 +83,12 @@ jobs:
               labels = [];
             }
             
-            const testLabels = {
-              int: JSON.parse(process.env.INT_LABELS),
-              e2e: JSON.parse(process.env.E2E_LABELS),
-            };
-            
-            const matchedIntTests = matchWildcards(labels, testLabels);
-            const matchedE2ETests = matchWildcards(labels, testLabels);
-            
-            console.log("Integration tests to launch:", JSON.stringify(matchedIntTests));
-            console.log("E2E tests to launch:", JSON.stringify(matchedE2ETests));
+            const matchedIntTests = matchWildcards(labels, JSON.parse(integrationTests), "int");
+            const matchedE2ETests = matchWildcards(labels, JSON.parse(e2eTests), "e2e");
+        
+            console.log("Matched Integration Tests:", matchedIntTests);
+            console.log("Matched E2E Tests:", matchedE2ETests);
+
             
             core.setOutput("int_matrix", JSON.stringify(matchedIntTests));
             core.setOutput("e2e_matrix", JSON.stringify(matchedE2ETests));
