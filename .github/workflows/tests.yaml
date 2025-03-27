@@ -94,19 +94,14 @@ jobs:
             core.setOutput("int_matrix", JSON.stringify(matchedIntTests));
             core.setOutput("e2e_matrix", JSON.stringify(matchedE2ETests));
 
-  run-tests:
-    name: "Run Selected Tests"
+  run-integration-tests:
     needs: detect-tests
-    if: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) != '[]' || fromJSON(needs.detect-tests.outputs.e2e_matrix) != '[]' }}
-    runs-on: ubuntu-latest
+    if: ${{ fromJSON(needs.detect-tests.outputs.int_tests) != '[]' }}
     strategy:
       matrix:
-        include:
-          # Dynamically create one job per test
-          - type: int
-            test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}
-          - type: e2e
-            test: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
+        test: ${{ fromJSON(needs.detect-tests.outputs.int_tests) }}
+    runs-on: ubuntu-latest
+    name: "Integration test: ${{ matrix.test }}"
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -119,7 +114,61 @@ jobs:
       - name: Install Ginkgo
         run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
-      - name: Run Ginkgo Test for ${{ matrix.test }}
+      - name: Run Ginkgo Test
         run: |
-          cd ./test/${{ matrix.type }}
+          cd ./test/int
           ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
+
+  run-e2e-tests:
+    needs: detect-tests
+    if: ${{ fromJSON(needs.detect-tests.outputs.e2e_tests) != '[]' }}
+    strategy:
+      matrix:
+        test: ${{ fromJSON(needs.detect-tests.outputs.e2e_tests) }}
+    runs-on: ubuntu-latest
+    name: "E2E test: ${{ matrix.test }}"
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup GO
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.23
+
+      - name: Install Ginkgo
+        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
+
+      - name: Run Ginkgo Test
+        run: |
+          cd ./test/e2e
+          ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
+#  run-tests:
+#    name: "Run Selected Tests"
+#    needs: detect-tests
+#    if: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) != '[]' || fromJSON(needs.detect-tests.outputs.e2e_matrix) != '[]' }}
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        include:
+#          # Dynamically create one job per test
+#          - type: int
+#            test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}
+#          - type: e2e
+#            test: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
+#    steps:
+#      - name: Checkout Code
+#        uses: actions/checkout@v4
+#
+#      - name: Setup GO
+#        uses: actions/setup-go@v4
+#        with:
+#          go-version: 1.23
+#
+#      - name: Install Ginkgo
+#        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
+#
+#      - name: Run Ginkgo Test for ${{ matrix.test }}
+#        run: |
+#          cd ./test/${{ matrix.type }}
+#          ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
