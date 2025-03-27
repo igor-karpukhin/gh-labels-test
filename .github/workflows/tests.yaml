@@ -1,6 +1,6 @@
 name: PR Test Runner
 
-# This is a prototype to run tests based on PR labels
+# This a prototype for running tests based on PR labels
 
 on:
   pull_request:
@@ -8,16 +8,15 @@ on:
 
 jobs:
   detect-tests:
-    name: "Detect tests"
     runs-on: ubuntu-latest
     outputs:
       int_matrix: ${{ steps.set-matrix.outputs.int_matrix }}
       e2e_matrix: ${{ steps.set-matrix.outputs.e2e_matrix }}
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Go
+      - name: Setup GO
         uses: actions/setup-go@v4
         with:
           go-version: 1.23
@@ -25,25 +24,28 @@ jobs:
       - name: Install Ginkgo
         run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
-      - name: Get PR labels
+      - name: Get PR Labels
         id: get-labels
         uses: actions/github-script@v7
         with:
           script: |
             const labels = context.payload.pull_request.labels.map(label => label.name);
             console.log("PR Labels:", labels);
-            core.setOutput("pr_labels", JSON.stringify(labels));
+            return labels;
 
       - name: List available Ginkgo test labels
         id: fetch-labels
         run: |
-          INT_LABELS=$(cd ./test/int && ginkgo labels | jq -s -c)
-          E2E_LABELS=$(cd ./test/e2e && ginkgo labels | jq -s -c)
+          INT_LABELS=$(cd ./test/int && ginkgo labels | sed 's/^int: //' | jq -s -c '.[0]')
+          E2E_LABELS=$(cd ./test/e2e && ginkgo labels | sed 's/^e2e: //' | jq -s -c '.[0]')
 
           echo "int_labels=$INT_LABELS" >> $GITHUB_ENV
           echo "e2e_labels=$E2E_LABELS" >> $GITHUB_ENV
+          
+          echo "Available Integration Tests: $INT_LABELS"
+          echo "Available E2E Tests: $E2E_LABELS"
 
-      - name: Compute test matrix
+      - name: Compute Test Matrix
         id: set-matrix
         uses: actions/github-script@v7
         env:
@@ -53,7 +55,7 @@ jobs:
           script: |
             function matchWildcards(labels, testLabels, testType) {
               let matchedLabels = new Set();
-            
+          
               for (let i = 0; i < labels.length; i++) {
                 let label = labels[i];
             
@@ -74,26 +76,31 @@ jobs:
               return [...matchedLabels];
             }
 
-            const prLabels = JSON.parse(`${{ steps.get-labels.outputs.pr_labels }}` || "[]");
-            const intTests = JSON.parse(process.env.INT_LABELS || "[]");
-            const e2eTests = JSON.parse(process.env.E2E_LABELS || "[]");
-
-            const matchedIntTests = matchWildcards(prLabels, intTests, "int");
-            const matchedE2ETests = matchWildcards(prLabels, e2eTests, "e2e");
-
+            let labels = [];
+            try {
+              labels = JSON.parse(`${{ steps.get-labels.outputs.result }}` || "[]");
+            } catch (error) {
+              labels = [];
+            }
+            
+            const matchedIntTests = matchWildcards(labels, JSON.parse(process.env.INT_LABELS), "int");
+            const matchedE2ETests = matchWildcards(labels, JSON.parse(process.env.E2E_LABELS), "e2e");
+        
             console.log("Matched Integration Tests:", matchedIntTests);
             console.log("Matched E2E Tests:", matchedE2ETests);
 
+            
             core.setOutput("int_matrix", JSON.stringify(matchedIntTests));
             core.setOutput("e2e_matrix", JSON.stringify(matchedE2ETests));
 
-  run-integration-tests:
+  run-tests:
     needs: detect-tests
-    if: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) != '[]' }}
+    if: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) != '[]' || fromJSON(needs.detect-tests.outputs.e2e_matrix) != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}
+        type: [int, e2e] # Run for both integration and e2e tests
+        test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -106,31 +113,7 @@ jobs:
       - name: Install Ginkgo
         run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
-      - name: Run Integration Tests
+      - name: Run Ginkgo Tests
         run: |
-          cd ./test/int
-          ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
-
-  run-e2e-tests:
-    needs: detect-tests
-    if: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) != '[]' }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        test: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup GO
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.23
-
-      - name: Install Ginkgo
-        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
-
-      - name: Run E2E Tests
-        run: |
-          cd ./test/e2e
+          cd ./test/${{ matrix.type }}
           ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
