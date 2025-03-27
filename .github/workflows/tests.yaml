@@ -8,6 +8,7 @@ on:
 
 jobs:
   detect-tests:
+    name: "Select tests to run"
     runs-on: ubuntu-latest
     outputs:
       int_matrix: ${{ steps.set-matrix.outputs.int_matrix }}
@@ -55,7 +56,7 @@ jobs:
           script: |
             function matchWildcards(labels, testLabels, testType) {
               let matchedLabels = new Set();
-          
+            
               for (let i = 0; i < labels.length; i++) {
                 let label = labels[i];
             
@@ -64,7 +65,7 @@ jobs:
                 } else {
                   let prefixMatch = label.match(new RegExp(`^test/${testType}/(.+)$`));
                   if (prefixMatch) {
-                    let pattern = new RegExp(`^${prefixMatch[1].replace(/\*/g, ".*")}$`);
+                    let pattern = new RegExp(`^${prefixMatch[1].replace(/\*/g, ".*")}$`, 'i');
                     testLabels.forEach(test => {
                       if (pattern.test(test)) {
                         matchedLabels.add(test);
@@ -85,22 +86,27 @@ jobs:
             
             const matchedIntTests = matchWildcards(labels, JSON.parse(process.env.INT_LABELS), "int");
             const matchedE2ETests = matchWildcards(labels, JSON.parse(process.env.E2E_LABELS), "e2e");
-        
+            
             console.log("Matched Integration Tests:", matchedIntTests);
             console.log("Matched E2E Tests:", matchedE2ETests);
-
+            
             
             core.setOutput("int_matrix", JSON.stringify(matchedIntTests));
             core.setOutput("e2e_matrix", JSON.stringify(matchedE2ETests));
 
   run-tests:
+    name: "Run selected tests"
     needs: detect-tests
     if: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) != '[]' || fromJSON(needs.detect-tests.outputs.e2e_matrix) != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         type: [int, e2e] # Run for both integration and e2e tests
-        test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
+        include:
+          - type: int
+            test_matrix: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}
+          - type: e2e
+            test_matrix: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -116,4 +122,7 @@ jobs:
       - name: Run Ginkgo Tests
         run: |
           cd ./test/${{ matrix.type }}
-          ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
+          for test in ${{ join(matrix.test_matrix, ' ') }}; do
+            echo "Running test: $test"
+            ginkgo --label-filter="$test" -r --fail-fast
+          done
