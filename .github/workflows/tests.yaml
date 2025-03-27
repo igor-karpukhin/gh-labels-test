@@ -95,18 +95,18 @@ jobs:
             core.setOutput("e2e_matrix", JSON.stringify(matchedE2ETests));
 
   run-tests:
-    name: "Run selected tests"
+    name: "Run Selected Tests"
     needs: detect-tests
     if: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) != '[]' || fromJSON(needs.detect-tests.outputs.e2e_matrix) != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        type: [int, e2e] # Run for both integration and e2e tests
         include:
+          # Dynamically create one job per test
           - type: int
-            test_matrix: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}
+            test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}
           - type: e2e
-            test_matrix: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
+            test: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -119,10 +119,7 @@ jobs:
       - name: Install Ginkgo
         run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
-      - name: Run Ginkgo Tests
+      - name: Run Ginkgo Test for ${{ matrix.test }}
         run: |
           cd ./test/${{ matrix.type }}
-          for test in ${{ join(matrix.test_matrix, ' ') }}; do
-            echo "Running test: $test"
-            ginkgo --label-filter="$test" -r --fail-fast
-          done
+          ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
