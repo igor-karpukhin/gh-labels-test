@@ -1,4 +1,4 @@
-name: PR Test Runner
+name: Tests
 
 # This a prototype for running tests based on PR labels
 
@@ -48,51 +48,63 @@ jobs:
 
       - name: Compute Test Matrix
         id: set-matrix
-        uses: actions/github-script@v7
         env:
           INT_LABELS: ${{ env.int_labels }}
           E2E_LABELS: ${{ env.e2e_labels }}
-        with:
-          script: |
-            function matchWildcards(labels, testLabels, testType) {
-              let matchedLabels = new Set();
-            
-              for (let i = 0; i < labels.length; i++) {
-                let label = labels[i];
-            
-                if (label === `test/${testType}/*`) {
-                  testLabels.forEach(test => matchedLabels.add(test));
-                } else {
-                  let prefixMatch = label.match(new RegExp(`^test/${testType}/(.+)$`));
-                  if (prefixMatch) {
-                    let pattern = new RegExp(`^${prefixMatch[1].replace(/\*/g, ".*")}$`, 'i');
-                    testLabels.forEach(test => {
-                      if (pattern.test(test)) {
-                        matchedLabels.add(test);
-                      }
-                    });
-                  }
-                }
-              }
-              return [...matchedLabels];
-            }
+          USE_JSON: true
+        run: |
+          make build-labels
+          ./bin/ginkgo-labels > result.json
+          echo "int_matrix=$(cat result.json | jq .int)" >> $GITHUB_OUTPUT
+          echo "e2e_matrix=$(cat result.json | jq .e2e)" >> $GITHUB_OUTPUT
 
-            let labels = [];
-            try {
-              labels = JSON.parse(`${{ steps.get-labels.outputs.result }}` || "[]");
-            } catch (error) {
-              labels = [];
-            }
-            
-            const matchedIntTests = matchWildcards(labels, JSON.parse(process.env.INT_LABELS), "int");
-            const matchedE2ETests = matchWildcards(labels, JSON.parse(process.env.E2E_LABELS), "e2e");
-            
-            console.log("Matched Integration Tests:", matchedIntTests);
-            console.log("Matched E2E Tests:", matchedE2ETests);
-            
-            
-            core.setOutput("int_matrix", JSON.stringify(matchedIntTests));
-            core.setOutput("e2e_matrix", JSON.stringify(matchedE2ETests));
+#      - name: Compute Test Matrix
+#        id: set-matrix
+#        uses: actions/github-script@v7
+#        env:
+#          INT_LABELS: ${{ env.int_labels }}
+#          E2E_LABELS: ${{ env.e2e_labels }}
+#        with:
+#          script: |
+#            function matchWildcards(labels, testLabels, testType) {
+#              let matchedLabels = new Set();
+#
+#              for (let i = 0; i < labels.length; i++) {
+#                let label = labels[i];
+#
+#                if (label === `test/${testType}/*`) {
+#                  testLabels.forEach(test => matchedLabels.add(test));
+#                } else {
+#                  let prefixMatch = label.match(new RegExp(`^test/${testType}/(.+)$`));
+#                  if (prefixMatch) {
+#                    let pattern = new RegExp(`^${prefixMatch[1].replace(/\*/g, ".*")}$`, 'i');
+#                    testLabels.forEach(test => {
+#                      if (pattern.test(test)) {
+#                        matchedLabels.add(test);
+#                      }
+#                    });
+#                  }
+#                }
+#              }
+#              return [...matchedLabels];
+#            }
+#
+#            let labels = [];
+#            try {
+#              labels = JSON.parse(`${{ steps.get-labels.outputs.result }}` || "[]");
+#            } catch (error) {
+#              labels = [];
+#            }
+#
+#            const matchedIntTests = matchWildcards(labels, JSON.parse(process.env.INT_LABELS), "int");
+#            const matchedE2ETests = matchWildcards(labels, JSON.parse(process.env.E2E_LABELS), "e2e");
+#
+#            console.log("Matched Integration Tests:", matchedIntTests);
+#            console.log("Matched E2E Tests:", matchedE2ETests);
+#
+#
+#            core.setOutput("int_matrix", JSON.stringify(matchedIntTests));
+#            core.setOutput("e2e_matrix", JSON.stringify(matchedE2ETests));
 
   run-integration-tests:
     needs: detect-tests
@@ -101,7 +113,7 @@ jobs:
       matrix:
         test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}
     runs-on: ubuntu-latest
-    name: "Integration test: ${{ matrix.test }}"
+    name: "integration: ${{ matrix.test }}"
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -126,7 +138,7 @@ jobs:
       matrix:
         test: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
     runs-on: ubuntu-latest
-    name: "E2E test: ${{ matrix.test }}"
+    name: "e2e: ${{ matrix.test }}"
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -143,32 +155,3 @@ jobs:
         run: |
           cd ./test/e2e
           ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast
-#  run-tests:
-#    name: "Run Selected Tests"
-#    needs: detect-tests
-#    if: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) != '[]' || fromJSON(needs.detect-tests.outputs.e2e_matrix) != '[]' }}
-#    runs-on: ubuntu-latest
-#    strategy:
-#      matrix:
-#        include:
-#          # Dynamically create one job per test
-#          - type: int
-#            test: ${{ fromJSON(needs.detect-tests.outputs.int_matrix) }}
-#          - type: e2e
-#            test: ${{ fromJSON(needs.detect-tests.outputs.e2e_matrix) }}
-#    steps:
-#      - name: Checkout Code
-#        uses: actions/checkout@v4
-#
-#      - name: Setup GO
-#        uses: actions/setup-go@v4
-#        with:
-#          go-version: 1.23
-#
-#      - name: Install Ginkgo
-#        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
-#
-#      - name: Run Ginkgo Test for ${{ matrix.test }}
-#        run: |
-#          cd ./test/${{ matrix.type }}
-#          ginkgo --label-filter="${{ matrix.test }}" -r --fail-fast

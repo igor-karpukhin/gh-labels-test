@@ -1,14 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"testing"
 )
-
-func jsonDump(data interface{}) string {
-	r, _ := json.Marshal(data)
-	return string(r)
-}
 
 func TestMatchWildcards(t *testing.T) {
 	tests := []struct {

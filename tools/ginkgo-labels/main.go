@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+func jsonDump(data interface{}) string {
+	r, _ := json.Marshal(data)
+	return string(r)
+}
+
 func MatchWildcards(labels []string, testLabels []string, testType string) []string {
 	matchedLabels := make(map[string]struct{})
 
@@ -43,6 +48,7 @@ func main() {
 	envPRLabels := os.Getenv("PR_LABELS")
 	envIntLabels := os.Getenv("INT_LABELS")
 	envE2ELabels := os.Getenv("E2E_LABELS")
+	envUseJson := os.Getenv("USE_JSON")
 
 	var labels []string
 	var intLabels []string
@@ -67,6 +73,13 @@ func main() {
 	matchedIntTestsJSON, _ := json.Marshal(matchedIntTests)
 	matchedE2ETestsJSON, _ := json.Marshal(matchedE2ETests)
 
+	if envUseJson != "" {
+		res := map[string]any{}
+		res["int"] = matchedIntTests
+		res["e2e"] = matchedE2ETests
+		fmt.Println(jsonDump(res))
+		return
+	}
 	fmt.Printf("Matched Integration Tests: %s\n", matchedIntTestsJSON)
 	fmt.Printf("Matched E2E Tests: %s\n", matchedE2ETestsJSON)
 }
