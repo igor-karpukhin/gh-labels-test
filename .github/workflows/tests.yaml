@@ -55,6 +55,9 @@ jobs:
         run: |
           make build-labels
           ./bin/ginkgo-labels > result.json
+          echo "int_matrix=$(cat result.json | jq .int)"
+          echo "e2e_matrix=$(cat result.json | jq .e2e)"
+          
           echo "int_matrix=$(cat result.json | jq .int)" >> $GITHUB_OUTPUT
           echo "e2e_matrix=$(cat result.json | jq .e2e)" >> $GITHUB_OUTPUT
 
