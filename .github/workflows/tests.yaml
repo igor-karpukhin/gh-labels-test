@@ -49,16 +49,15 @@ jobs:
       - name: Compute Test Matrix
         id: set-matrix
         env:
+          PR_LABELS: ${{ steps.get-labels.outputs.result }}
           INT_LABELS: ${{ env.int_labels }}
           E2E_LABELS: ${{ env.e2e_labels }}
           USE_JSON: true
         run: |
-          env
           make build-labels
-          ./bin/ginkgo-labels
           ./bin/ginkgo-labels > result.json
-          echo "int_matrix=$(cat result.json | jq .int)"
-          echo "e2e_matrix=$(cat result.json | jq .e2e)"
+          echo "Int tests to execute $(cat result.json | jq .int)"
+          echo "E2E tests to execute $(cat result.json | jq .e2e)"
           
           echo "int_matrix=$(cat result.json | jq .int)" >> $GITHUB_OUTPUT
           echo "e2e_matrix=$(cat result.json | jq .e2e)" >> $GITHUB_OUTPUT
