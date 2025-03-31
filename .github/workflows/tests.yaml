@@ -5,6 +5,16 @@ name: Tests
 on:
   pull_request:
     types: [opened, synchronize, labeled, unlabeled]
+  workflow_dispatch:
+    inputs:
+      testLabels:
+        description: 'A comma separated list of tests to execute'
+        required: false
+        default: '[]'
+      branchName:
+        description: 'The branch name to checkout'
+        required: false
+        default: 'master'
 
 jobs:
   detect-tests:
@@ -16,6 +26,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.branchName || github.head_ref }}
 
       - name: Setup GO
         uses: actions/setup-go@v4
@@ -26,13 +38,25 @@ jobs:
         run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
       - name: Get PR Labels
+        env:
+          TEST_LABELS: ${{ github.event.inputs.testLabels }}
         id: get-labels
         uses: actions/github-script@v7
         with:
           script: |
-            const labels = context.payload.pull_request.labels.map(label => label.name);
-            console.log("PR Labels:", labels);
-            return labels;
+            if (context.eventName === 'pull_request') {
+              prLabels = context.payload.pull_request.labels.map(label => label.name);
+              console.log("PR Labels:", prLabels);
+              return prLabels;
+            }
+            
+            if (context.eventName === "workflow_dispatch") {
+              inputLabels = process.env.TEST_LABELS;
+              console.log("PR Labels:", inputLabels);
+              return inputLabels.split(",").map(label => label.trim()).filter(label => label !== "");
+            }
+            console.log("Not a PullRequest or WorkflowDispatch event skipping");
+            return [];
 
       - name: List available Ginkgo test labels
         id: fetch-labels
